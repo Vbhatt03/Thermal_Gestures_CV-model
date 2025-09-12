@@ -106,9 +106,9 @@ def train_lopo():
 
 if __name__ == "__main__":
     RANDOM_SEED = 42
-    DATA_DIR = "D:\\micro-gestures\\data\\Labelled_Data\\"  # Update this path
-    MODEL_DIR = "D:\\micro-gestures\\models\\"  # Update this path
-    EPOCHS = 50
+    DATA_DIR = "D:\Vowels_only\\"  # Update this path
+    MODEL_DIR = "src\models"  # Update this path
+    EPOCHS = 16
     SEQUENCE_LENGTH = 5
     BATCH_SIZE = 32
     NUM_CLASSES = 26
