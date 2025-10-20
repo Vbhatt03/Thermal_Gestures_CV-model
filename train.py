@@ -46,10 +46,27 @@ def train_lopo():
         #config_obj = Config(globals())
 
         print("Preprocessing data...")
+        print(f"DEBUG: X_train length: {len(X_train)}")
+        if len(X_train) > 0:
+            print(f"DEBUG: X_train[0] type: {type(X_train[0])}, length: {len(X_train[0])}")
+            if len(X_train[0]) > 0:
+                print(f"DEBUG: X_train[0][0] shape: {X_train[0][0].shape}, dtype: {X_train[0][0].dtype}")
+        
         X_train_processed, X_test_processed, y_train, y_test = prepare_data_for_training(
             X_train, X_test, y_train, y_test, BATCH_SIZE,
             SEQUENCE_LENGTH, NUM_CLASSES, RANDOM_SEED, use_augmentation
         )
+
+        # Debug: Print shapes
+        print(f"X_train_processed shape: {X_train_processed.shape}")
+        print(f"X_test_processed shape: {X_test_processed.shape}")
+        print(f"y_train shape: {y_train.shape}")
+        print(f"y_test shape: {y_test.shape}")
+        
+        if len(X_train_processed.shape) < 4:
+            print(f"ERROR: X_train_processed has incorrect dimensions!")
+            print(f"Expected at least 4D (samples, frames, height, width, channels), got {len(X_train_processed.shape)}D")
+            continue
 
         input_shape = X_train_processed.shape[1:]
         num_classes = len(class_names)
@@ -64,8 +81,8 @@ def train_lopo():
 
         callbacks = [
             create_model_checkpoint(model_dir),
-            #create_early_stopping(patience=10),
-            #create_reduce_lr_callback(patience=5),
+            create_early_stopping(patience=10),
+            create_reduce_lr_callback(patience=5),
             tf.keras.callbacks.TensorBoard(
                 log_dir=os.path.join(model_dir, 'logs'),
                 histogram_freq=1
@@ -106,8 +123,8 @@ def train_lopo():
 
 if __name__ == "__main__":
     RANDOM_SEED = 42
-    DATA_DIR = "D:\Vowels_only\\"  # Update this path
-    MODEL_DIR = "src\models"  # Update this path
+    DATA_DIR = "D:\\Data_collecn\\micro-gestures\\data\\Labelled_data\\"  # Update this path
+    MODEL_DIR = "src\\models"  # Update this path
     EPOCHS = 16
     SEQUENCE_LENGTH = 5
     BATCH_SIZE = 32

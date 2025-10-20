@@ -51,15 +51,34 @@ def load_thermal_data_lopo(base_folder, train_users, test_users, random_state=42
                 if data is not None:
                     thermal_frames = []
                     for frame in data:
+                        # Handle new format: [timestamp, [raw_sensor_data]]
+                        if not frame or len(frame) < 2:  # Skip empty or malformed frames
+                            continue
+                        
                         timestamp = frame[0]
-                        thermal_array = np.array(frame[1])
-                        if thermal_array.shape != (24, 32):
-                            if len(thermal_array) == 768:
-                                thermal_array = thermal_array.reshape(24, 32)
-                            else:
-                                continue
+                        raw_data = frame[1]
+                        
+                        # Skip if raw_data is empty
+                        if not raw_data:
+                            continue
+                        
+                        thermal_array = np.array(raw_data, dtype=np.float32)
+                        
+                        # Ensure we have 768 values (24×32 thermal grid)
+                        if thermal_array.shape[0] < 768:
+                            continue  # Skip frames with insufficient data
+                        
+                        # Take only first 768 values if more are present
+                        thermal_array = thermal_array[:768].reshape(24, 32)
+                        
+                        # Normalize from sensor range to 0-1
+                        # Adjust these values based on your actual sensor range
+                        thermal_array = np.clip(thermal_array / 65535.0, 0, 1)
+                        
                         thermal_frames.append(thermal_array)
-                    if thermal_frames:
+                    
+                    # Only add sequences with at least 3 frames
+                    if len(thermal_frames) >= 3:
                         sequences.append(thermal_frames)
                         letters.append(letter)
                         person_ids.append(person)

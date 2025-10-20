@@ -4,14 +4,16 @@ from scipy.ndimage import rotate, shift
 
 def normalize_thermal_data(thermal_array):
     """Normalize thermal data to [0, 1] range."""
+    thermal_array = thermal_array.astype(np.float32)
     min_val = np.min(thermal_array)
     max_val = np.max(thermal_array)
     
     # Avoid division by zero
     if max_val == min_val:
-        return np.zeros_like(thermal_array)
+        return np.zeros_like(thermal_array, dtype=np.float32)
     
-    return (thermal_array - min_val) / (max_val - min_val)
+    normalized = (thermal_array - min_val) / (max_val - min_val)
+    return np.clip(normalized, 0, 1).astype(np.float32)
 
 def normalize_per_sequence(sequence):
     """Normalize an entire sequence for consistent scaling."""
