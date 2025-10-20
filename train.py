@@ -17,7 +17,7 @@ from src.models.utils import (
     save_model, create_model_checkpoint, create_early_stopping, 
     create_reduce_lr_callback, evaluate_model
 )
-from src.visualization.plotter import plot_confusion_matrix, plot_training_history
+from src.visualization.plotter import plot_confusion_matrix, plot_training_history, TestAccuracyTracker
 
 # ...existing code...
 
@@ -35,7 +35,6 @@ def train_lopo():
         print(f"\n=== LOPO: Using '{test_user}' as test user ===")
         train_users = [u for u in user_folders if u != test_user]
 
-        # Load data: train on all users except test_user, test on test_user
         X_train, X_test, y_train, y_test, class_names = load_thermal_data_lopo(
             DATA_DIR,
             train_users=train_users,
@@ -43,31 +42,16 @@ def train_lopo():
             random_state=RANDOM_SEED
         )
 
-        #config_obj = Config(globals())
-
         print("Preprocessing data...")
-        print(f"DEBUG: X_train length: {len(X_train)}")
-        if len(X_train) > 0:
-            print(f"DEBUG: X_train[0] type: {type(X_train[0])}, length: {len(X_train[0])}")
-            if len(X_train[0]) > 0:
-                print(f"DEBUG: X_train[0][0] shape: {X_train[0][0].shape}, dtype: {X_train[0][0].dtype}")
         
         X_train_processed, X_test_processed, y_train, y_test = prepare_data_for_training(
             X_train, X_test, y_train, y_test, BATCH_SIZE,
             SEQUENCE_LENGTH, NUM_CLASSES, RANDOM_SEED, use_augmentation
         )
 
-        # Debug: Print shapes
         print(f"X_train_processed shape: {X_train_processed.shape}")
         print(f"X_test_processed shape: {X_test_processed.shape}")
-        print(f"y_train shape: {y_train.shape}")
-        print(f"y_test shape: {y_test.shape}")
         
-        if len(X_train_processed.shape) < 4:
-            print(f"ERROR: X_train_processed has incorrect dimensions!")
-            print(f"Expected at least 4D (samples, frames, height, width, channels), got {len(X_train_processed.shape)}D")
-            continue
-
         input_shape = X_train_processed.shape[1:]
         num_classes = len(class_names)
 
@@ -79,10 +63,13 @@ def train_lopo():
         print("Creating model...")
         model = create_cnn_lstm_model(input_shape, num_classes)
 
+        # Callback to track test accuracy during training
+        test_acc_tracker = TestAccuracyTracker(X_test_processed, y_test)
+
         callbacks = [
-            create_model_checkpoint(model_dir),
-            create_early_stopping(patience=10),
-            create_reduce_lr_callback(patience=5),
+            test_acc_tracker,
+            create_early_stopping(patience=15),
+            create_reduce_lr_callback(patience=8),
             tf.keras.callbacks.TensorBoard(
                 log_dir=os.path.join(model_dir, 'logs'),
                 histogram_freq=1
@@ -92,7 +79,6 @@ def train_lopo():
         print("Training model...")
         history = model.fit(
             X_train_processed, y_train,
-            validation_split=0.1,
             batch_size=32,
             epochs=EPOCHS,
             callbacks=callbacks,
@@ -102,37 +88,53 @@ def train_lopo():
         final_model_path = os.path.join(model_dir, f"{model_name}_final.h5")
         save_model(model, final_model_path)
 
-        print("Evaluating model...")
+        print("Evaluating model on test user...")
         y_pred, cm = evaluate_model(model, X_test_processed, y_test, class_names)
 
-        plot_training_history(history)
-        plot_confusion_matrix(cm, class_names)
+        # Plot training history with test accuracies
+        try:
+            plot_training_history(history, test_accuracies=test_acc_tracker.test_accuracies)
+        except Exception as e:
+            print(f"⚠️  Could not plot training history: {e}")
+
+        try:
+            plot_confusion_matrix(cm, class_names)
+        except Exception as e:
+            print(f"⚠️  Could not plot confusion matrix: {e}")
 
         np.save(os.path.join(model_dir, 'class_names.npy'), class_names)
 
         results[test_user] = {
             "model_dir": model_dir,
             "confusion_matrix": cm,
-            # Add more metrics as needed
+            "test_accuracy": np.mean(y_pred == y_test)
         }
 
-        print(f"LOPO for '{test_user}' completed. Model saved to {final_model_path}")
+        print(f"LOPO for '{test_user}' completed.")
+        print(f"Final Test Accuracy: {np.mean(y_pred == y_test):.2%}")
 
-    print("LOPO cross-validation completed.")
+    print("\n" + "="*50)
+    print("LOPO Cross-Validation Results Summary:")
+    print("="*50)
+    for user, metrics in results.items():
+        print(f"{user}: {metrics['test_accuracy']:.2%}")
+    
+    avg_accuracy = np.mean([r['test_accuracy'] for r in results.values()])
+    print(f"\nAverage Accuracy: {avg_accuracy:.2%}")
+    print("="*50)
+    
     return results
 
 if __name__ == "__main__":
     RANDOM_SEED = 42
-    DATA_DIR = "D:\\Data_collecn\\micro-gestures\\data\\Labelled_data\\"  # Update this path
-    MODEL_DIR = "src\\models"  # Update this path
-    EPOCHS = 16
+    DATA_DIR = "D:\\Data_collecn\\micro-gestures\\data\\Labelled_data\\"
+    MODEL_DIR = "src\\models"
+    EPOCHS = 20
     SEQUENCE_LENGTH = 5
     BATCH_SIZE = 32
-    NUM_CLASSES = 26
+    NUM_CLASSES = 5
     use_augmentation = True
     np.random.seed(RANDOM_SEED)
     tf.random.set_seed(RANDOM_SEED)
 
-    # train_model()  # Comment out the old call
     train_lopo()
-# ...existing code...

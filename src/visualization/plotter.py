@@ -2,6 +2,26 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from matplotlib.animation import FuncAnimation
+import tensorflow as tf
+
+class TestAccuracyTracker(tf.keras.callbacks.Callback):
+    """
+    Callback to track test accuracy during training.
+    Useful for LOPO where we don't have validation set.
+    """
+    def __init__(self, test_data, test_labels):
+        super().__init__()
+        self.test_data = test_data
+        self.test_labels = test_labels
+        self.test_accuracies = []
+    
+    def on_epoch_end(self, epoch, logs=None):
+        """Evaluate on test set after each epoch."""
+        test_loss, test_acc = self.model.evaluate(
+            self.test_data, self.test_labels, verbose=0
+        )
+        self.test_accuracies.append(test_acc)
+
 
 def plot_thermal_frame(thermal_frame, title=None, cmap='inferno'):
     """
@@ -84,37 +104,55 @@ def plot_confusion_matrix(cm, class_names, title='Confusion Matrix'):
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
     plt.tight_layout()
-    plt.show()
+    plt.savefig('confusion_matrix.png', dpi=150, bbox_inches='tight')
+    print("✓ Confusion matrix plot saved as 'confusion_matrix.png'")
+    plt.close()
 
-def plot_training_history(history):
+def plot_training_history(history, test_accuracies=None):
     """
     Plot training history.
     
     Args:
         history: Keras training history
+        test_accuracies: Optional list of test accuracies for each epoch
     """
     plt.figure(figsize=(12, 5))
     
     # Plot accuracy
     plt.subplot(1, 2, 1)
-    plt.plot(history.history['accuracy'], label='Train')
-    plt.plot(history.history['val_accuracy'], label='Validation')
+    plt.plot(history.history['accuracy'], label='Train', marker='o', linewidth=2)
+    
+    # Plot test accuracy if provided
+    if test_accuracies is not None and len(test_accuracies) > 0:
+        plt.plot(test_accuracies, label='Test', marker='s', linewidth=2)
+    # Otherwise check if validation data exists
+    elif 'val_accuracy' in history.history:
+        plt.plot(history.history['val_accuracy'], label='Validation', marker='s', linewidth=2)
+    
     plt.title('Model Accuracy')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
     plt.legend()
+    plt.grid(True, alpha=0.3)
     
     # Plot loss
     plt.subplot(1, 2, 2)
-    plt.plot(history.history['loss'], label='Train')
-    plt.plot(history.history['val_loss'], label='Validation')
+    plt.plot(history.history['loss'], label='Train', marker='o', linewidth=2)
+    
+    # Plot validation loss if it exists
+    if 'val_loss' in history.history:
+        plt.plot(history.history['val_loss'], label='Validation', marker='s', linewidth=2)
+    
     plt.title('Model Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
+    plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.show()
+    plt.savefig('training_history.png', dpi=150, bbox_inches='tight')
+    print("✓ Training history plot saved as 'training_history.png'")
+    plt.close()
 
 def visualize_model_predictions(model, X_test, y_test, class_names, num_examples=5):
     """
