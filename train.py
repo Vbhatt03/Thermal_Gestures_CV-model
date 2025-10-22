@@ -46,7 +46,9 @@ def train_lopo():
         
         X_train_processed, X_test_processed, y_train, y_test = prepare_data_for_training(
             X_train, X_test, y_train, y_test, BATCH_SIZE,
-            SEQUENCE_LENGTH, NUM_CLASSES, RANDOM_SEED, use_augmentation
+            SEQUENCE_LENGTH, NUM_CLASSES, RANDOM_SEED, use_augmentation,
+            use_sliding_window=True,
+            window_stride=WINDOW_STRIDE
         )
 
         print(f"X_train_processed shape: {X_train_processed.shape}")
@@ -130,9 +132,10 @@ if __name__ == "__main__":
     DATA_DIR = "D:\\Data_collecn\\micro-gestures\\data\\Labelled_data\\"
     MODEL_DIR = "src\\models"
     EPOCHS = 20
-    SEQUENCE_LENGTH = 5
+    SEQUENCE_LENGTH = 30  # Increased from 5 to capture longer gestures (max 110 frames)
     BATCH_SIZE = 32
     NUM_CLASSES = 5
+    WINDOW_STRIDE = 10  # Sliding window stride (creates overlapping windows)
     use_augmentation = True
     np.random.seed(RANDOM_SEED)
     tf.random.set_seed(RANDOM_SEED)
