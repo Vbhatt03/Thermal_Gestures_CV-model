@@ -1,6 +1,27 @@
 import numpy as np
 from scipy import ndimage
 from scipy.ndimage import rotate, shift
+def temporal_downsample_to_target(sequence, target_length=100):
+    """
+    Resample sequence to exact target_length.
+    Preserves temporal structure regardless of original length.
+    
+    Args:
+        sequence: List of frames
+        target_length: Target number of frames (default 100)
+    
+    Returns:
+        List of target_length frames
+    """
+    current_length = len(sequence)
+    
+    if current_length == target_length:
+        return sequence
+    
+    # Linear index interpolation to sample exact frames
+    indices = np.linspace(0, current_length - 1, target_length, dtype=int)
+    return [sequence[int(i)] for i in indices]
+
 
 def normalize_thermal_data(thermal_array):
     """Normalize thermal data to [0, 1] range."""
@@ -70,11 +91,15 @@ def enhance_edges(thermal_array, weight=0.3):
     enhanced = (1 - weight) * thermal_array + weight * edges
     return enhanced
 
-def preprocess_sequence(sequence, use_frame_differencing=True, normalize_sequence=True):
+def preprocess_sequence(sequence, use_frame_differencing=True, normalize_sequence=True, target_length=100):
     """Apply preprocessing to a sequence of thermal frames."""
+    
+    # STEP 0: DOWNSAMPLE TO CONSISTENT LENGTH (NEW - ADD THIS FIRST!)
+    sequence = temporal_downsample_to_target(sequence, target_length=target_length)
+    
     processed_sequence = []
     
-    # Step 1: Normalize the entire sequence if specified
+    # STEP 1: Normalize the entire sequence if specified
     if normalize_sequence:
         sequence = normalize_per_sequence(sequence)
     
@@ -135,11 +160,12 @@ def preprocess_dataset(sequences, max_length, use_frame_differencing=True,
     processed_sequences = []
     
     for sequence in sequences:
-        # Apply preprocessing
+        # Apply preprocessing (including downsampling to max_length)
         processed_seq = preprocess_sequence(
             sequence, 
             use_frame_differencing=use_frame_differencing,
-            normalize_sequence=normalize_sequence
+            normalize_sequence=normalize_sequence,
+            target_length=max_length  # Use max_length as target
         )
         
         # Apply augmentation if specified
@@ -149,18 +175,13 @@ def preprocess_dataset(sequences, max_length, use_frame_differencing=True,
         else:
             processed_sequences.append(processed_seq)
     
-    # Pad sequences to the same length
+    # NO PADDING NEEDED ANYMORE! All sequences are already max_length
     padded_sequences = []
     for seq in processed_sequences:
-        if len(seq) > max_length:
-            # Truncate if sequence is too long
-            padded_seq = seq[:max_length]
-        else:
-            # Pad with zeros if sequence is too short
-            padding = [np.zeros_like(seq[0]) for _ in range(max_length - len(seq))]
-            padded_seq = seq + padding
-        
-        padded_sequences.append(np.array(padded_seq))
+        # Sequence should already be exactly max_length, but add safety check
+        if len(seq) != max_length:
+            print(f"Warning: sequence length {len(seq)} != {max_length}")
+        padded_sequences.append(np.array(seq))
     
     return np.array(padded_sequences)
 

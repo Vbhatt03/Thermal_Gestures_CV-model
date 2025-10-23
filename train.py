@@ -130,7 +130,7 @@ if __name__ == "__main__":
     DATA_DIR = "D:\\Data_collecn\\micro-gestures\\data\\Labelled_data\\"
     MODEL_DIR = "src\\models"
     EPOCHS = 20
-    SEQUENCE_LENGTH = 150
+    SEQUENCE_LENGTH = 100
     BATCH_SIZE = 32
     NUM_CLASSES = 5
     use_augmentation = True
