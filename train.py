@@ -17,7 +17,7 @@ from src.models.utils import (
     save_model, create_model_checkpoint, create_early_stopping, 
     create_reduce_lr_callback, evaluate_model
 )
-from src.visualization.plotter import plot_confusion_matrix, plot_training_history, TestAccuracyTracker
+from src.visualization.plotter import plot_confusion_matrix, plot_training_history, plot_lopo_results, TestAccuracyTracker
 
 # ...existing code...
 
@@ -91,14 +91,36 @@ def train_lopo():
         print("Evaluating model on test user...")
         y_pred, cm = evaluate_model(model, X_test_processed, y_test, class_names)
 
-        # Plot training history with test accuracies
+        # Plot comprehensive LOPO results (loss, accuracy, confusion matrix)
+        try:
+            plot_lopo_results(
+                history, 
+                test_accuracies=test_acc_tracker.test_accuracies,
+                cm=cm,
+                class_names=class_names,
+                user_name=test_user,
+                model_dir=model_dir
+            )
+            print(f"✓ Comprehensive LOPO results plot created for {test_user}")
+        except Exception as e:
+            print(f"⚠️  Could not plot LOPO results: {e}")
+
+        # Also save individual plots for reference
         try:
             plot_training_history(history, test_accuracies=test_acc_tracker.test_accuracies)
+            # Move to model directory
+            if os.path.exists('training_history.png'):
+                import shutil
+                shutil.move('training_history.png', os.path.join(model_dir, f'training_history_{test_user}.png'))
         except Exception as e:
             print(f"⚠️  Could not plot training history: {e}")
 
         try:
-            plot_confusion_matrix(cm, class_names)
+            plot_confusion_matrix(cm, class_names, title=f'Confusion Matrix - {test_user}')
+            # Move to model directory
+            if os.path.exists('confusion_matrix.png'):
+                import shutil
+                shutil.move('confusion_matrix.png', os.path.join(model_dir, f'confusion_matrix_{test_user}.png'))
         except Exception as e:
             print(f"⚠️  Could not plot confusion matrix: {e}")
 

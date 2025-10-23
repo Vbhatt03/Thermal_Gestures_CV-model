@@ -1,3 +1,4 @@
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -152,6 +153,59 @@ def plot_training_history(history, test_accuracies=None):
     plt.tight_layout()
     plt.savefig('training_history.png', dpi=150, bbox_inches='tight')
     print("✓ Training history plot saved as 'training_history.png'")
+    plt.close()
+
+def plot_lopo_results(history, test_accuracies, cm, class_names, user_name, model_dir):
+    """
+    Plot comprehensive LOPO results: loss, test accuracy, and confusion matrix.
+    
+    Args:
+        history: Keras training history
+        test_accuracies: List of test accuracies for each epoch
+        cm: Confusion matrix
+        class_names: List of class names
+        user_name: Name of test user
+        model_dir: Directory to save plots
+    """
+    # Create figure with 3 subplots
+    fig = plt.figure(figsize=(16, 5))
+    
+    # Plot 1: Loss (Train)
+    ax1 = plt.subplot(1, 3, 1)
+    epochs = range(1, len(history.history['loss']) + 1)
+    ax1.plot(epochs, history.history['loss'], 'b-o', linewidth=2, markersize=6, label='Train Loss')
+    ax1.set_title(f'Loss - Test User: {user_name}', fontsize=12, fontweight='bold')
+    ax1.set_xlabel('Epoch', fontsize=11)
+    ax1.set_ylabel('Loss', fontsize=11)
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+    
+    # Plot 2: Accuracy (Train + Test)
+    ax2 = plt.subplot(1, 3, 2)
+    ax2.plot(epochs, history.history['accuracy'], 'g-o', linewidth=2, markersize=6, label='Train Accuracy')
+    if test_accuracies is not None and len(test_accuracies) > 0:
+        test_epochs = range(1, len(test_accuracies) + 1)
+        ax2.plot(test_epochs, test_accuracies, 'r-s', linewidth=2, markersize=6, label='Test Accuracy')
+    ax2.set_title(f'Accuracy - Test User: {user_name}', fontsize=12, fontweight='bold')
+    ax2.set_xlabel('Epoch', fontsize=11)
+    ax2.set_ylabel('Accuracy', fontsize=11)
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+    
+    # Plot 3: Confusion Matrix
+    ax3 = plt.subplot(1, 3, 3)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, 
+                yticklabels=class_names, ax=ax3, cbar_kws={'label': 'Count'})
+    ax3.set_title(f'Confusion Matrix - Test User: {user_name}', fontsize=12, fontweight='bold')
+    ax3.set_ylabel('True Label', fontsize=11)
+    ax3.set_xlabel('Predicted Label', fontsize=11)
+    
+    plt.tight_layout()
+    
+    # Save the comprehensive plot
+    plot_path = os.path.join(model_dir, f'lopo_results_{user_name}.png')
+    plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+    print(f"✓ LOPO results plot saved: {plot_path}")
     plt.close()
 
 def visualize_model_predictions(model, X_test, y_test, class_names, num_examples=5):
