@@ -185,36 +185,49 @@ def normalize_motion_frames(motion_sequence):
     """
     Normalize motion frames AFTER calculating differences.
     
-    This normalizes the combined [raw + gradient] frames to prevent
-    scale issues while preserving motion patterns.
+    Uses different strategies for each channel:
+    - Channel 0 (thermal): Percentile-based (for non-zero-centered data)
+    - Channel 1 (gradient): Max-absolute normalization (for zero-centered data)
     
     Args:
         motion_sequence: List of motion frames with shape (24, 32, 2)
     
     Returns:
-        List of normalized motion frames [0, 1] range
+        List of normalized motion frames with stable ranges
     """
     normalized = []
     
     for frame in motion_sequence:
-        # Each channel normalized independently
         normalized_frame = np.zeros_like(frame, dtype=np.float32)
         
-        for ch in range(frame.shape[-1]):
-            channel = frame[..., ch].astype(np.float32)
-            
-            # Per-channel robust normalization using percentiles
-            p5 = np.percentile(channel, 5)
-            p95 = np.percentile(channel, 95)
-            
-            if p95 > p5:
-                normalized_channel = (channel - p5) / (p95 - p5)
-                # Allow slight overflow for motion gradients (can be negative/positive)
-                normalized_channel = np.clip(normalized_channel, -0.5, 1.5)
-            else:
-                normalized_channel = np.zeros_like(channel)
-            
-            normalized_frame[..., ch] = normalized_channel
+        # Channel 0: Thermal (percentile-based, non-zero-centered)
+        thermal_channel = frame[..., 0].astype(np.float32)
+        p5_thermal = np.percentile(thermal_channel, 5)
+        p95_thermal = np.percentile(thermal_channel, 95)
+        
+        if p95_thermal > p5_thermal:
+            normalized_thermal = (thermal_channel - p5_thermal) / (p95_thermal - p5_thermal)
+            normalized_thermal = np.clip(normalized_thermal, 0, 1)
+        else:
+            normalized_thermal = np.zeros_like(thermal_channel)
+        
+        normalized_frame[..., 0] = normalized_thermal
+        
+        # Channel 1: Gradient (max-absolute normalization, zero-centered)
+        # This is much more stable for zero-centered signals
+        gradient_channel = frame[..., 1].astype(np.float32)
+        max_abs_gradient = np.max(np.abs(gradient_channel))
+        
+        if max_abs_gradient > 1e-7:
+            # Normalize to [-1, 1] by dividing by max absolute value
+            normalized_gradient = gradient_channel / (max_abs_gradient + 1e-7)
+        else:
+            # If gradient is essentially zero, keep it zero
+            normalized_gradient = np.zeros_like(gradient_channel)
+        
+        # Clip to ensure stability (shouldn't be needed, but safe)
+        normalized_gradient = np.clip(normalized_gradient, -1, 1)
+        normalized_frame[..., 1] = normalized_gradient
         
         normalized.append(normalized_frame)
     
