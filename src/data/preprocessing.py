@@ -183,51 +183,87 @@ def calculate_motion_features_raw(sequence):
 
 def normalize_motion_frames(motion_sequence):
     """
-    Normalize motion frames AFTER calculating differences.
+    Normalize motion frames with DIFFERENT strategies per channel.
     
-    Uses different strategies for each channel:
-    - Channel 0 (thermal): Percentile-based (for non-zero-centered data)
-    - Channel 1 (gradient): Max-absolute normalization (for zero-centered data)
+    Channel 0 (Thermal): Non-zero-centered → Percentile-based normalization
+    Channel 1 (Gradient): Zero-centered → Robust z-score normalization
+    
+    Why different methods?
+    - Thermal values cluster around a non-zero center (65xxx range raw, or peaks after BG subtract)
+      Percentiles work well here
+    - Gradient is mostly zeros with occasional spikes (motion events)
+      Percentiles fail (tiny denominator); z-score with MAD is robust
     
     Args:
-        motion_sequence: List of motion frames with shape (24, 32, 2)
+        motion_sequence: List of frames with shape (24, 32, 2)
+                        Channel 0: raw thermal
+                        Channel 1: temporal gradient (frame - prev_frame)
     
     Returns:
-        List of normalized motion frames with stable ranges
+        List of properly normalized frames with shape (24, 32, 2)
     """
     normalized = []
     
+    # PASS 1: Compute global statistics for gradient channel (zero-centered)
+    all_gradients = []
+    for frame in motion_sequence:
+        if frame.shape[-1] >= 2:
+            all_gradients.append(frame[..., 1].flatten())
+    
+    if all_gradients:
+        all_gradients = np.concatenate(all_gradients)
+        # Use MAD (Median Absolute Deviation) for robust std estimation
+        # MAD is more stable than percentiles for zero-centered signals
+        gradient_median = np.median(all_gradients)
+        gradient_mad = np.median(np.abs(all_gradients - gradient_median))
+        # Convert MAD to std equivalent: std ≈ 1.4826 * MAD
+        gradient_std = max(1.4826 * gradient_mad, 1e-6)
+    else:
+        gradient_std = 1e-6
+    
+    # PASS 2: Normalize each frame using channel-specific methods
     for frame in motion_sequence:
         normalized_frame = np.zeros_like(frame, dtype=np.float32)
         
-        # Channel 0: Thermal (percentile-based, non-zero-centered)
-        thermal_channel = frame[..., 0].astype(np.float32)
-        p5_thermal = np.percentile(thermal_channel, 5)
-        p95_thermal = np.percentile(thermal_channel, 95)
+        # ═══════════════════════════════════════════════════════════
+        # CHANNEL 0: Thermal (Non-zero-centered)
+        # Method: Percentile-based normalization
+        # ═══════════════════════════════════════════════════════════
+        if frame.shape[-1] >= 1:
+            thermal_channel = frame[..., 0]
+            p5 = np.percentile(thermal_channel, 5)
+            p95 = np.percentile(thermal_channel, 95)
+            
+            if p95 > p5:
+                # Scale [p5, p95] → [0, 1]
+                normalized_thermal = (thermal_channel - p5) / (p95 - p5)
+                normalized_thermal = np.clip(normalized_thermal, 0, 1)
+            else:
+                # Edge case: uniform frame (all same thermal value)
+                normalized_thermal = np.ones_like(thermal_channel) * 0.5
+            
+            normalized_frame[..., 0] = normalized_thermal
         
-        if p95_thermal > p5_thermal:
-            normalized_thermal = (thermal_channel - p5_thermal) / (p95_thermal - p5_thermal)
-            normalized_thermal = np.clip(normalized_thermal, 0, 1)
-        else:
-            normalized_thermal = np.zeros_like(thermal_channel)
-        
-        normalized_frame[..., 0] = normalized_thermal
-        
-        # Channel 1: Gradient (max-absolute normalization, zero-centered)
-        # This is much more stable for zero-centered signals
-        gradient_channel = frame[..., 1].astype(np.float32)
-        max_abs_gradient = np.max(np.abs(gradient_channel))
-        
-        if max_abs_gradient > 1e-7:
-            # Normalize to [-1, 1] by dividing by max absolute value
-            normalized_gradient = gradient_channel / (max_abs_gradient + 1e-7)
-        else:
-            # If gradient is essentially zero, keep it zero
-            normalized_gradient = np.zeros_like(gradient_channel)
-        
-        # Clip to ensure stability (shouldn't be needed, but safe)
-        normalized_gradient = np.clip(normalized_gradient, -1, 1)
-        normalized_frame[..., 1] = normalized_gradient
+        # ═══════════════════════════════════════════════════════════
+        # CHANNEL 1: Gradient (Zero-centered)
+        # Method: Robust z-score normalization (using MAD)
+        # ═══════════════════════════════════════════════════════════
+        if frame.shape[-1] >= 2:
+            gradient_channel = frame[..., 1]
+            
+            # Z-score: (x - median) / MAD_std
+            # Median and MAD are more robust than mean/std for this signal
+            normalized_gradient = (gradient_channel - gradient_median) / gradient_std
+            
+            # Soft clip to [-3, 3] standard deviations (natural bounds)
+            # Prevents extreme outliers from dominating CNN attention
+            normalized_gradient = np.clip(normalized_gradient, -3, 3)
+            
+            # Scale to approximately [-0.5, 0.5]
+            # Balances with thermal channel [0, 1] so neither dominates
+            normalized_gradient = normalized_gradient / 6.0
+            
+            normalized_frame[..., 1] = normalized_gradient
         
         normalized.append(normalized_frame)
     
