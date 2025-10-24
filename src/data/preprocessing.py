@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import ndimage
-from scipy.ndimage import rotate, shift
+from scipy.ndimage import rotate, shift, binary_dilation
+
 def temporal_downsample_to_target(sequence, target_length=100):
     """
     Resample sequence to exact target_length.
@@ -23,8 +24,106 @@ def temporal_downsample_to_target(sequence, target_length=100):
     return [sequence[int(i)] for i in indices]
 
 
+def subtract_background(sequence, background_percentile=20):
+    """
+    Subtract background thermal signature to isolate hand.
+    
+    The hand holding a marker is the HOTTEST part.
+    By subtracting cool regions (background), we focus on the hand.
+    
+    Args:
+        sequence: List of raw thermal frames
+        background_percentile: Percentile for background estimation (lower = cooler regions)
+    
+    Returns:
+        List of background-subtracted frames
+    """
+    # Estimate background (coolest regions across entire sequence)
+    all_values = np.concatenate([f.flatten() for f in sequence])
+    background_temp = np.percentile(all_values, background_percentile)
+    
+    # Subtract background from each frame
+    bg_subtracted = []
+    for frame in sequence:
+        frame = frame.astype(np.float32)
+        # Subtract background
+        diff = frame - background_temp
+        # Clip to prevent negative values (keep only positive differences)
+        diff = np.maximum(diff, 0)
+        bg_subtracted.append(diff)
+    
+    return bg_subtracted
+
+
+def extract_hand_region(thermal_frame, percentile_threshold=70):
+    """
+    Extract hand/marker region by detecting hot spots.
+    
+    Assumes hand (hottest region) is the target.
+    Masks out background to focus model attention.
+    
+    Args:
+        thermal_frame: Raw or processed thermal frame
+        percentile_threshold: Percentile for hot region detection (higher = hotter regions only)
+    
+    Returns:
+        Masked frame with hand region highlighted, background suppressed
+    """
+    thermal_frame = thermal_frame.astype(np.float32)
+    
+    # Find hot threshold (hand is hottest)
+    threshold = np.percentile(thermal_frame, percentile_threshold)
+    
+    # Create binary mask of hot regions
+    mask = thermal_frame > threshold
+    
+    # Dilate mask slightly to include margins around hand
+    mask = binary_dilation(mask, iterations=2)
+    
+    # Get background value (coolest part)
+    background_value = np.percentile(thermal_frame, 10)
+    
+    # Apply mask: keep hand region, suppress background
+    masked_frame = np.where(mask, thermal_frame, background_value)
+    
+    return masked_frame.astype(np.float32)
+
+
+def normalize_per_frame_percentile(sequence):
+    """
+    Normalize each frame independently using robust percentiles.
+    BEST approach for thermal gesture recognition.
+    
+    Preserves thermal gradients and is robust to outliers.
+    
+    Args:
+        sequence: List of thermal frames (24x32 arrays)
+    
+    Returns:
+        List of normalized frames [0, 1]
+    """
+    normalized_sequence = []
+    
+    for frame in sequence:
+        frame = frame.astype(np.float32)
+        
+        # Robust percentile-based normalization per frame
+        p5 = np.percentile(frame, 5)    # Background temperature
+        p95 = np.percentile(frame, 95)  # Hand/gesture temperature
+        
+        # Normalize
+        if p95 <= p5:  # Edge case: uniform frame
+            normalized_frame = np.ones_like(frame, dtype=np.float32) * 0.5
+        else:
+            normalized_frame = (frame - p5) / (p95 - p5)
+            normalized_frame = np.clip(normalized_frame, 0, 1)
+        
+        normalized_sequence.append(normalized_frame.astype(np.float32))
+    
+    return normalized_sequence
+
 def normalize_thermal_data(thermal_array):
-    """Normalize thermal data to [0, 1] range."""
+    """Normalize thermal data to [0, 1] range (legacy - kept for compatibility)."""
     thermal_array = thermal_array.astype(np.float32)
     min_val = np.min(thermal_array)
     max_val = np.max(thermal_array)
@@ -37,7 +136,7 @@ def normalize_thermal_data(thermal_array):
     return np.clip(normalized, 0, 1).astype(np.float32)
 
 def normalize_per_sequence(sequence):
-    """Normalize an entire sequence for consistent scaling."""
+    """Normalize an entire sequence for consistent scaling (legacy - NOT RECOMMENDED)."""
     flat_seq = np.concatenate([frame.flatten() for frame in sequence])
     min_val = np.min(flat_seq)
     max_val = np.max(flat_seq)
@@ -48,8 +147,81 @@ def normalize_per_sequence(sequence):
     
     return [(frame - min_val) / (max_val - min_val) for frame in sequence]
 
+def calculate_motion_features_raw(sequence):
+    """
+    Calculate motion features from RAW thermal data BEFORE normalization.
+    
+    This is the CORRECT approach - motion is calculated from raw values
+    to preserve motion magnitudes and prevent scale collapse.
+    
+    Args:
+        sequence: List of raw thermal frames (not normalized yet)
+    
+    Returns:
+        List of frames with 2 channels: [raw_thermal, temporal_gradient]
+        Shape of each frame: (24, 32, 2)
+    """
+    motion_frames = []
+    
+    for i, frame in enumerate(sequence):
+        frame = frame.astype(np.float32)
+        
+        if i == 0:
+            # First frame: no previous frame, use zero gradient
+            gradient = np.zeros_like(frame, dtype=np.float32)
+        else:
+            # Calculate gradient: current - previous
+            # This preserves motion magnitude and direction
+            prev_frame = sequence[i-1].astype(np.float32)
+            gradient = frame - prev_frame
+        
+        # Stack as channels: [raw_thermal, motion_gradient]
+        stacked = np.stack([frame, gradient], axis=-1)
+        motion_frames.append(stacked)
+    
+    return motion_frames
+
+def normalize_motion_frames(motion_sequence):
+    """
+    Normalize motion frames AFTER calculating differences.
+    
+    This normalizes the combined [raw + gradient] frames to prevent
+    scale issues while preserving motion patterns.
+    
+    Args:
+        motion_sequence: List of motion frames with shape (24, 32, 2)
+    
+    Returns:
+        List of normalized motion frames [0, 1] range
+    """
+    normalized = []
+    
+    for frame in motion_sequence:
+        # Each channel normalized independently
+        normalized_frame = np.zeros_like(frame, dtype=np.float32)
+        
+        for ch in range(frame.shape[-1]):
+            channel = frame[..., ch].astype(np.float32)
+            
+            # Per-channel robust normalization using percentiles
+            p5 = np.percentile(channel, 5)
+            p95 = np.percentile(channel, 95)
+            
+            if p95 > p5:
+                normalized_channel = (channel - p5) / (p95 - p5)
+                # Allow slight overflow for motion gradients (can be negative/positive)
+                normalized_channel = np.clip(normalized_channel, -0.5, 1.5)
+            else:
+                normalized_channel = np.zeros_like(channel)
+            
+            normalized_frame[..., ch] = normalized_channel
+        
+        normalized.append(normalized_frame)
+    
+    return normalized
+
 def calculate_frame_differences(sequence):
-    """Calculate frame differences to highlight motion."""
+    """Calculate frame differences to highlight motion (LEGACY - NOT RECOMMENDED)."""
     diffs = []
     for i in range(1, len(sequence)):
         diff = sequence[i] - sequence[i-1]
@@ -76,9 +248,9 @@ def normalize_per_user(thermal_array):
     
     return normalized
 
-def reduce_noise(thermal_array, sigma=0.5):
-    """Apply Gaussian filter to reduce noise."""
-    return ndimage.gaussian_filter(thermal_array, sigma=sigma)
+# def reduce_noise(thermal_array, sigma=0.2):
+#     """Apply Gaussian filter to reduce noise."""
+#     return ndimage.gaussian_filter(thermal_array, sigma=sigma)
 
 def enhance_edges(thermal_array, weight=0.3):
     """Enhance edges in thermal image."""
@@ -91,45 +263,67 @@ def enhance_edges(thermal_array, weight=0.3):
     enhanced = (1 - weight) * thermal_array + weight * edges
     return enhanced
 
-def preprocess_sequence(sequence, use_frame_differencing=True, normalize_sequence=True, target_length=100):
-    """Apply preprocessing to a sequence of thermal frames."""
+def preprocess_sequence(sequence, use_frame_differencing=True, normalize_sequence=True, 
+                       target_length=100, hand_focused=True):
+    """
+    Apply preprocessing to a sequence of thermal frames.
     
-    # STEP 0: DOWNSAMPLE TO CONSISTENT LENGTH (NEW - ADD THIS FIRST!)
+    CORRECT order:
+    1. Temporal resampling
+    2. (NEW) Hand-focused preprocessing: background subtraction + region extraction
+    3. Calculate motion from RAW data (BEFORE normalization)
+    4. Normalize the combined [raw + motion] frames
+    
+    Args:
+        sequence: List of raw thermal frames
+        use_frame_differencing: Whether to include motion channel (recommended: True)
+        normalize_sequence: Whether to normalize (recommended: True)
+        target_length: Target sequence length (default: 100)
+        hand_focused: Whether to focus on hand/marker region (recommended: True)
+    
+    Returns:
+        List of preprocessed frames with shape (24, 32, 2)
+        Channel 0: Normalized thermal data (hand-focused if enabled)
+        Channel 1: Normalized motion gradient
+    """
+    
+    # STEP 1: Temporal resampling to consistent length
     sequence = temporal_downsample_to_target(sequence, target_length=target_length)
     
-    processed_sequence = []
+    # STEP 2 (NEW): Hand-focused preprocessing
+    if hand_focused:
+        # Subtract background to remove static thermal variations
+        sequence = subtract_background(sequence, background_percentile=20)
+        
+        # Extract hand region (mask out background)
+        sequence = [extract_hand_region(frame, percentile_threshold=70) for frame in sequence]
     
-    # STEP 1: Normalize the entire sequence if specified
-    if normalize_sequence:
-        sequence = normalize_per_sequence(sequence)
-    
-    # Process each frame
-    for i, frame in enumerate(sequence):
-        # Step 2: If not normalized as sequence, normalize individual frame
-        if not normalize_sequence:
-            frame = normalize_thermal_data(frame)
-        
-        # Step 3: Apply noise reduction
-        frame = reduce_noise(frame)
-        
-        # Step 4: Enhance edges
-        frame = enhance_edges(frame)
-        
-        processed_sequence.append(frame)
-    
-    # Step 5: Calculate frame differences if specified
-    if use_frame_differencing and len(sequence) > 1:
-        diff_sequence = calculate_frame_differences(processed_sequence)
-        
-        # Step 6: Combine original and difference frames
-        # Stack as channels
-        final_sequence = [np.stack([orig, diff], axis=-1) 
-                         for orig, diff in zip(processed_sequence, diff_sequence)]
+    # STEP 3: Calculate motion features from RAW data BEFORE normalization
+    if use_frame_differencing:
+        motion_frames = calculate_motion_features_raw(sequence)
+        # Result: List of frames with shape (24, 32, 2)
+        # Channel 0: raw thermal (hand-focused if enabled)
+        # Channel 1: temporal gradient
     else:
-        # Add channel dimension
-        final_sequence = [np.expand_dims(frame, axis=-1) for frame in processed_sequence]
+        # If no differencing, just wrap raw frames with zero gradient channel
+        motion_frames = []
+        for frame in sequence:
+            frame = frame.astype(np.float32)
+            zero_gradient = np.zeros_like(frame, dtype=np.float32)
+            stacked = np.stack([frame, zero_gradient], axis=-1)
+            motion_frames.append(stacked)
     
-    return final_sequence
+    # STEP 4: Normalize after motion calculation
+    if normalize_sequence:
+        processed_sequence = normalize_motion_frames(motion_frames)
+    else:
+        # Still clip and convert to float32
+        processed_sequence = []
+        for frame in motion_frames:
+            frame = np.clip(frame.astype(np.float32), 0, 1)
+            processed_sequence.append(frame)
+    
+    return processed_sequence
 
 def augment_sequence(sequence, max_augmentations=3):
     """Apply data augmentation to a sequence."""
@@ -155,8 +349,18 @@ def augment_sequence(sequence, max_augmentations=3):
     return augmented_sequences[:max_augmentations + 1]
 
 def preprocess_dataset(sequences, max_length, use_frame_differencing=True, 
-                      normalize_sequence=True, use_augmentation=False):
-    """Preprocess an entire dataset."""
+                      normalize_sequence=True, use_augmentation=False, hand_focused=True):
+    """
+    Preprocess an entire dataset.
+    
+    Args:
+        sequences: List of thermal frame sequences
+        max_length: Target sequence length
+        use_frame_differencing: Whether to include motion channel
+        normalize_sequence: Whether to normalize
+        use_augmentation: Whether to augment training data
+        hand_focused: Whether to focus on hand/marker region (recommended: True)
+    """
     processed_sequences = []
     
     for sequence in sequences:
@@ -165,7 +369,8 @@ def preprocess_dataset(sequences, max_length, use_frame_differencing=True,
             sequence, 
             use_frame_differencing=use_frame_differencing,
             normalize_sequence=normalize_sequence,
-            target_length=max_length  # Use max_length as target
+            target_length=max_length,  # Use max_length as target
+            hand_focused=hand_focused  # Enable hand-focused preprocessing
         )
         
         # Apply augmentation if specified
@@ -188,23 +393,27 @@ def preprocess_dataset(sequences, max_length, use_frame_differencing=True,
 def prepare_data_for_training(X_train, X_test, y_train, y_test, batch_size,
                               max_sequence_length, num_classes, random_state,
                               use_augmentation):
-    """Prepare data for training."""
-    # Preprocess training data
+    """
+    Prepare data for training with hand-focused preprocessing.
+    """
+    # Preprocess training data (with hand-focused preprocessing)
     X_train_processed = preprocess_dataset(
         X_train, 
         max_sequence_length,
         use_frame_differencing=True,
         normalize_sequence=True,
-        use_augmentation=True
+        use_augmentation=True,
+        hand_focused=True  # Enable hand-focused preprocessing
     )
     
-    # Preprocess test data (no augmentation for test data)
+    # Preprocess test data (no augmentation for test data, but hand-focused)
     X_test_processed = preprocess_dataset(
         X_test, 
         max_sequence_length,
         use_frame_differencing=True,
         normalize_sequence=True,
-        use_augmentation=False
+        use_augmentation=False,
+        hand_focused=True  # Enable hand-focused preprocessing
     )
     
     # If augmentation was used, we need to expand y_train
