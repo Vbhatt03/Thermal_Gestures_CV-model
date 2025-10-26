@@ -4,6 +4,19 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 from datetime import datetime
 
+# GPU Configuration
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        print(f"GPU(s) detected: {len(gpus)} GPU(s) available")
+        print(f"GPU details: {gpus}")
+    except RuntimeError as e:
+        print(f"GPU configuration error: {e}")
+else:
+    print("No GPU detected. Running on CPU.")
+
 # class Config:
 #     def __init__(self, config_dict):
 #         for k, v in config_dict.items():
@@ -77,13 +90,14 @@ def train_lopo():
         ]
 
         print("Training model...")
-        history = model.fit(
-            X_train_processed, y_train,
-            batch_size=32,
-            epochs=EPOCHS,
-            callbacks=callbacks,
-            verbose=1
-        )
+        with tf.device('/GPU:0' if gpus else '/CPU:0'):
+            history = model.fit(
+                X_train_processed, y_train,
+                batch_size=32,
+                epochs=EPOCHS,
+                callbacks=callbacks,
+                verbose=1
+            )
 
         final_model_path = os.path.join(model_dir, f"{model_name}_final.h5")
         save_model(model, final_model_path)

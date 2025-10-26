@@ -18,9 +18,14 @@ class TestAccuracyTracker(tf.keras.callbacks.Callback):
     
     def on_epoch_end(self, epoch, logs=None):
         """Evaluate on test set after each epoch."""
-        test_loss, test_acc = self.model.evaluate(
-            self.test_data, self.test_labels, verbose=0
-        )
+        # Detect GPU availability
+        gpus = tf.config.list_physical_devices('GPU')
+        
+        # Evaluate on GPU
+        with tf.device('/GPU:0' if gpus else '/CPU:0'):
+            test_loss, test_acc = self.model.evaluate(
+                self.test_data, self.test_labels, verbose=0
+            )
         self.test_accuracies.append(test_acc)
 
 

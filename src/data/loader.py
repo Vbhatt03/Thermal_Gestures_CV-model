@@ -1,6 +1,7 @@
 import os
 import json
 import numpy as np
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 def load_json_file(file_path):
@@ -123,3 +124,21 @@ def pad_sequences(sequences, max_length, pad_value=0):
         mask.append(seq_mask)
     
     return np.array(padded_sequences), np.array(mask)
+
+def create_gpu_dataset(X, y, batch_size=32, shuffle=True):
+    """
+    Create a TensorFlow dataset optimized for GPU processing.
+    Handles automatic batching and prefetching for GPU efficiency.
+    """
+    # Convert numpy arrays to TensorFlow dataset
+    dataset = tf.data.Dataset.from_tensor_slices((X, y))
+    
+    if shuffle:
+        dataset = dataset.shuffle(buffer_size=len(X))
+    
+    # Batch and prefetch for GPU
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+    
+    return dataset
+

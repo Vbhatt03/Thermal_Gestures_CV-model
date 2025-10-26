@@ -56,8 +56,13 @@ def create_reduce_lr_callback(patience=5, factor=0.2, min_lr=1e-6):
 
 def evaluate_model(model, X_test, y_test, class_names):
     """Evaluate model and print detailed metrics."""
-    # Predict classes for test data
-    y_pred_probs = model.predict(X_test)
+    # Detect GPU availability
+    gpus = tf.config.list_physical_devices('GPU')
+    
+    # Predict classes for test data on GPU
+    with tf.device('/GPU:0' if gpus else '/CPU:0'):
+        y_pred_probs = model.predict(X_test)
+    
     y_pred = np.argmax(y_pred_probs, axis=1)
     
     # Calculate and print classification report

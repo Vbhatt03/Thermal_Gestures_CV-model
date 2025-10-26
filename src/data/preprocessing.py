@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 from scipy import ndimage
 from scipy.ndimage import rotate, shift, binary_dilation
 
