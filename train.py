@@ -41,7 +41,11 @@ def train_lopo():
             test_users=[test_user],
             random_state=RANDOM_SEED
         )
+        X_train = np.expand_dims(X_train, axis=-1)  # (N, 100, 24, 32) → (N, 100, 24, 32, 1)
+        X_test = np.expand_dims(X_test, axis=-1)
 
+        print(f"X_train shape: {X_train.shape}")  # Should print: (N, 100, 24, 32, 1)
+        print(f"X_test shape: {X_test.shape}")
         print("Preprocessing data...")
         
         X_train_processed, X_test_processed, y_train, y_test = prepare_data_for_training(

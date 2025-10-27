@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 from scipy import ndimage
 from scipy.ndimage import rotate, shift, binary_dilation
 
@@ -312,34 +313,33 @@ def enhance_edges(thermal_array, weight=0.3):
     enhanced = (1 - weight) * thermal_array + weight * edges
     return enhanced
 
-def preprocess_sequence(sequence, use_frame_differencing=True, normalize_sequence=True, 
+def preprocess_sequence(sequence, normalize_sequence=True, 
                        target_length=100, hand_focused=True):
     """
     Apply preprocessing to a sequence of thermal frames.
+    THERMAL ONLY - No gradient channel
     
-    CORRECT order:
-    1. Temporal resampling
-    2. (NEW) Hand-focused preprocessing: background subtraction + region extraction
-    3. Calculate motion from RAW data (BEFORE normalization)
-    4. Normalize the combined [raw + motion] frames
+    Preprocessing order:
+    1. Temporal resampling to 100 frames
+    2. Background subtraction (percentile=20)
+    3. Hand region extraction (percentile_threshold=70)
+    4. Per-frame percentile normalization
     
     Args:
         sequence: List of raw thermal frames
-        use_frame_differencing: Whether to include motion channel (recommended: True)
         normalize_sequence: Whether to normalize (recommended: True)
         target_length: Target sequence length (default: 100)
         hand_focused: Whether to focus on hand/marker region (recommended: True)
     
     Returns:
-        List of preprocessed frames with shape (24, 32, 2)
-        Channel 0: Normalized thermal data (hand-focused if enabled)
-        Channel 1: Normalized motion gradient
+        List of preprocessed thermal frames with shape (100, 24, 32)
+        Values: Normalized to 0-1 range
     """
     
     # STEP 1: Temporal resampling to consistent length
     sequence = temporal_downsample_to_target(sequence, target_length=target_length)
     
-    # STEP 2 (NEW): Hand-focused preprocessing
+    # STEP 2: Hand-focused preprocessing
     if hand_focused:
         # Subtract background to remove static thermal variations
         sequence = subtract_background(sequence, background_percentile=20)
@@ -347,28 +347,13 @@ def preprocess_sequence(sequence, use_frame_differencing=True, normalize_sequenc
         # Extract hand region (mask out background)
         sequence = [extract_hand_region(frame, percentile_threshold=70) for frame in sequence]
     
-    # STEP 3: Calculate motion features from RAW data BEFORE normalization
-    if use_frame_differencing:
-        motion_frames = calculate_motion_features_raw(sequence)
-        # Result: List of frames with shape (24, 32, 2)
-        # Channel 0: raw thermal (hand-focused if enabled)
-        # Channel 1: temporal gradient
-    else:
-        # If no differencing, just wrap raw frames with zero gradient channel
-        motion_frames = []
-        for frame in sequence:
-            frame = frame.astype(np.float32)
-            zero_gradient = np.zeros_like(frame, dtype=np.float32)
-            stacked = np.stack([frame, zero_gradient], axis=-1)
-            motion_frames.append(stacked)
-    
-    # STEP 4: Normalize after motion calculation
+    # STEP 3: Normalize thermal data
     if normalize_sequence:
-        processed_sequence = normalize_motion_frames(motion_frames)
+        processed_sequence = normalize_per_frame_percentile(sequence)
     else:
         # Still clip and convert to float32
         processed_sequence = []
-        for frame in motion_frames:
+        for frame in sequence:
             frame = np.clip(frame.astype(np.float32), 0, 1)
             processed_sequence.append(frame)
     
@@ -397,15 +382,14 @@ def augment_sequence(sequence, max_augmentations=3):
     # Return original + augmented sequences (limited by max_augmentations)
     return augmented_sequences[:max_augmentations + 1]
 
-def preprocess_dataset(sequences, max_length, use_frame_differencing=True, 
-                      normalize_sequence=True, use_augmentation=False, hand_focused=True):
+def preprocess_dataset(sequences, max_length, normalize_sequence=True, 
+                      use_augmentation=False, hand_focused=True):
     """
-    Preprocess an entire dataset.
+    Preprocess an entire dataset (THERMAL ONLY - no gradient channel).
     
     Args:
         sequences: List of thermal frame sequences
         max_length: Target sequence length
-        use_frame_differencing: Whether to include motion channel
         normalize_sequence: Whether to normalize
         use_augmentation: Whether to augment training data
         hand_focused: Whether to focus on hand/marker region (recommended: True)
@@ -414,9 +398,9 @@ def preprocess_dataset(sequences, max_length, use_frame_differencing=True,
     
     for sequence in sequences:
         # Apply preprocessing (including downsampling to max_length)
+        # THERMAL ONLY - no gradient channel
         processed_seq = preprocess_sequence(
             sequence, 
-            use_frame_differencing=use_frame_differencing,
             normalize_sequence=normalize_sequence,
             target_length=max_length,  # Use max_length as target
             hand_focused=hand_focused  # Enable hand-focused preprocessing
@@ -443,13 +427,12 @@ def prepare_data_for_training(X_train, X_test, y_train, y_test, batch_size,
                               max_sequence_length, num_classes, random_state,
                               use_augmentation):
     """
-    Prepare data for training with hand-focused preprocessing.
+    Prepare data for training with hand-focused preprocessing (THERMAL ONLY).
     """
-    # Preprocess training data (with hand-focused preprocessing)
+    # Preprocess training data (with hand-focused preprocessing, THERMAL ONLY)
     X_train_processed = preprocess_dataset(
         X_train, 
         max_sequence_length,
-        use_frame_differencing=True,
         normalize_sequence=True,
         use_augmentation=True,
         hand_focused=True  # Enable hand-focused preprocessing
@@ -459,7 +442,6 @@ def prepare_data_for_training(X_train, X_test, y_train, y_test, batch_size,
     X_test_processed = preprocess_dataset(
         X_test, 
         max_sequence_length,
-        use_frame_differencing=True,
         normalize_sequence=True,
         use_augmentation=False,
         hand_focused=True  # Enable hand-focused preprocessing
