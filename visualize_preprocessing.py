@@ -377,85 +377,31 @@ class ThermalPreprocessingVisualizer:
         self.save_video_from_frames(hand_regions, output_file, "Step 3: Hand Region Extraction")
         
         # ===== STEP 4: Motion Features Calculation =====
-        print("\nStep 4: Motion Features Calculation (Raw + Gradient)...")
+        print("\nStep 4: Motion Features Calculation (Thermal Only)...")
         motion_frames = calculate_motion_features_raw(hand_regions)
         print(f"Motion frames shape: {motion_frames[0].shape}")
         print(f"  Channel 0 (Thermal): {motion_frames[0][:, :, 0].min():.2f} to {motion_frames[0][:, :, 0].max():.2f}")
-        print(f"  Channel 1 (Gradient): {motion_frames[0][:, :, 1].min():.2f} to {motion_frames[0][:, :, 1].max():.2f}")
         
-        # Visualize each channel separately
+        # Visualize thermal channel only
         thermal_channel = [f[:, :, 0] for f in motion_frames]
-        gradient_channel = [f[:, :, 1] for f in motion_frames]
         
-        self.get_frame_stats(thermal_channel, "Step 4a: Thermal Channel")
-        output_file = os.path.join(self.output_dir, "04a_thermal_channel.mp4")
-        self.save_video_from_frames(thermal_channel, output_file, "Step 4a: Motion Features - Thermal Channel")
-        
-        self.get_frame_stats(gradient_channel, "Step 4b: Gradient Channel")
-        output_file = os.path.join(self.output_dir, "04b_gradient_channel.mp4")
-        # Use a different colormap for gradient (centered around 0)
-        self.save_video_from_frames(gradient_channel, output_file, "Step 4b: Motion Features - Gradient Channel", 
-                                   cmap=plt.cm.RdBu_r)
+        self.get_frame_stats(thermal_channel, "Step 4: Thermal Channel")
+        output_file = os.path.join(self.output_dir, "04_thermal_channel.mp4")
+        self.save_video_from_frames(thermal_channel, output_file, "Step 4: Motion Features - Thermal Channel")
         
         # ===== STEP 5: Normalization =====
         print("\nStep 5: Motion Frame Normalization...")
         normalized_frames = normalize_motion_frames(motion_frames)
         print(f"Normalized frames shape: {normalized_frames[0].shape}")
         print(f"  Channel 0 (Thermal) normalized: {normalized_frames[0][:, :, 0].min():.2f} to {normalized_frames[0][:, :, 0].max():.2f}")
-        print(f"  Channel 1 (Gradient) normalized: {normalized_frames[0][:, :, 1].min():.2f} to {normalized_frames[0][:, :, 1].max():.2f}")
         
-        # Visualize normalized channels
+        # Visualize normalized thermal channel
         thermal_norm = [f[:, :, 0] for f in normalized_frames]
-        gradient_norm = [f[:, :, 1] for f in normalized_frames]
         
-        self.get_frame_stats(thermal_norm, "Step 5a: Normalized Thermal Channel")
-        output_file = os.path.join(self.output_dir, "05a_thermal_normalized.mp4")
-        self.save_video_from_frames(thermal_norm, output_file, "Step 5a: Normalized Thermal Channel [0-1]", 
+        self.get_frame_stats(thermal_norm, "Step 5: Normalized Thermal Channel")
+        output_file = os.path.join(self.output_dir, "05_thermal_normalized.mp4")
+        self.save_video_from_frames(thermal_norm, output_file, "Step 5: Normalized Thermal Channel [0-1]", 
                                    is_normalized=True)
-        
-        self.get_frame_stats(gradient_norm, "Step 5b: Normalized Gradient Channel")
-        output_file = os.path.join(self.output_dir, "05b_gradient_normalized.mp4")
-        self.save_video_from_frames(gradient_norm, output_file, "Step 5b: Normalized Gradient Channel [-0.5-0.5]", 
-                                   cmap=plt.cm.RdBu_r, is_normalized=True)
-        
-        # ===== STEP 6: Create Comparison Video =====
-        print("\nStep 6: Creating Comparison Video (All Stages)...")
-        
-        # Take every 5th frame for comparison to keep it shorter
-        comparison_dict = {
-            "0. Raw Thermal": [f for i, f in enumerate(thermal_frames) if i % 5 == 0][:20],
-            "1. Resampled": [f for i, f in enumerate(resampled) if i % 5 == 0][:20],
-            "2. BG Subtracted": [f for i, f in enumerate(bg_subtracted) if i % 5 == 0][:20],
-            "3. Hand Region": [f for i, f in enumerate(hand_regions) if i % 5 == 0][:20],
-            "4. Thermal Channel": [f for i, f in enumerate(thermal_channel) if i % 5 == 0][:20],
-            "5. Gradient Channel": [f for i, f in enumerate(gradient_channel) if i % 5 == 0][:20],
-        }
-        
-        output_file = os.path.join(self.output_dir, "06_all_stages_comparison.mp4")
-        self.create_comparison_video(comparison_dict, output_file, "Preprocessing Pipeline Comparison")
-        
-        # ===== STEP 7: Full Pipeline with Single Function =====
-        print("\nStep 7: Full Pipeline Processing (using preprocess_sequence)...")
-        fully_processed = preprocess_sequence(
-            thermal_frames,
-            use_frame_differencing=True,
-            normalize_sequence=True,
-            target_length=100,
-            hand_focused=True
-        )
-        
-        thermal_final = [f[:, :, 0] for f in fully_processed]
-        gradient_final = [f[:, :, 1] for f in fully_processed]
-        
-        self.get_frame_stats(thermal_final, "Step 7a: Final Thermal (Full Pipeline)")
-        output_file = os.path.join(self.output_dir, "07a_final_thermal.mp4")
-        self.save_video_from_frames(thermal_final, output_file, "Step 7a: Final Thermal Channel (Full Pipeline)", 
-                                   is_normalized=True)
-        
-        self.get_frame_stats(gradient_final, "Step 7b: Final Gradient (Full Pipeline)")
-        output_file = os.path.join(self.output_dir, "07b_final_gradient.mp4")
-        self.save_video_from_frames(gradient_final, output_file, "Step 7b: Final Gradient Channel (Full Pipeline)", 
-                                   cmap=plt.cm.RdBu_r, is_normalized=True)
         
         print("\n" + "="*70)
         print("✓ VISUALIZATION COMPLETE")

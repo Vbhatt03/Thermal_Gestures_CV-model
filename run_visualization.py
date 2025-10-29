@@ -37,7 +37,7 @@ def run_visualization():
     """)
     
     # Find thermal.json in current directory
-    json_file = "E_1.json"
+    json_file = "A_1.json"
     
     if not os.path.exists(json_file):
         print(f"❌ Error: {json_file} not found in current directory")

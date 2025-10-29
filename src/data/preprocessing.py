@@ -368,9 +368,9 @@ def augment_sequence(sequence, max_augmentations=3):
         aug_seq = [rotate(frame, angle, reshape=False) for frame in sequence]
         augmented_sequences.append(aug_seq)
     
-    # Apply random shifts
+    # Apply random shifts (2D: [dy, dx] for 24x32 frames)
     for dx, dy in [(2, 0), (-2, 0), (0, 2), (0, -2)]:
-        aug_seq = [shift(frame, [dy, dx, 0]) for frame in sequence]
+        aug_seq = [shift(frame, [dy, dx]) for frame in sequence]
         augmented_sequences.append(aug_seq)
     
     # Add slight gaussian noise
@@ -434,7 +434,7 @@ def prepare_data_for_training(X_train, X_test, y_train, y_test, batch_size,
         X_train, 
         max_sequence_length,
         normalize_sequence=True,
-        use_augmentation=True,
+        use_augmentation=use_augmentation,  # Use the parameter, not hardcoded True
         hand_focused=True  # Enable hand-focused preprocessing
     )
     
