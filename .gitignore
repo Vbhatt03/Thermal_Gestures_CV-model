@@ -1,2 +1,10 @@
 *.h5
 *.v2
+*.json
+*.mp4
+__pycache__/
+.DS_Store
+*.v2
+*.png
+*.zip
+*.npy

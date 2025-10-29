@@ -73,7 +73,7 @@ def load_thermal_data_lopo(base_folder, train_users, test_users, random_state=42
                         
                         # Normalize from sensor range to 0-1
                         # Adjust these values based on your actual sensor range
-                        thermal_array = np.clip(thermal_array / 65535.0, 0, 1)
+                        #thermal_array = np.clip(thermal_array / 65535.0, 0, 1)
                         
                         thermal_frames.append(thermal_array)
                     
