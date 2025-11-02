@@ -434,7 +434,7 @@ def prepare_data_for_training(X_train, X_test, y_train, y_test, batch_size,
         X_train, 
         max_sequence_length,
         normalize_sequence=True,
-        use_augmentation=True,
+        use_augmentation=use_augmentation,
         hand_focused=True  # Enable hand-focused preprocessing
     )
     

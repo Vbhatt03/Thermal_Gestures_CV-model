@@ -90,7 +90,7 @@ def plot_thermal_sequence(sequence, interval=200, title=None, cmap='inferno'):
     
     return ani
 
-def plot_confusion_matrix(cm, class_names, title='Confusion Matrix'):
+def plot_confusion_matrix(cm, class_names, save_path):
     """
     Plot confusion matrix.
     
@@ -101,15 +101,15 @@ def plot_confusion_matrix(cm, class_names, title='Confusion Matrix'):
     """
     plt.figure(figsize=(10, 8))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
-    plt.title(title)
+    plt.title("Confusion Matrix")
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
     plt.tight_layout()
-    plt.savefig('confusion_matrix.png', dpi=150, bbox_inches='tight')
-    print("✓ Confusion matrix plot saved as 'confusion_matrix.png'")
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    print(f"✓ Confusion matrix plot saved as '{save_path}'")
     plt.close()
 
-def plot_training_history(history, test_accuracies=None):
+def plot_training_history(history, save_path = None, test_accuracies=None):
     """
     Plot training history.
     
@@ -117,6 +117,8 @@ def plot_training_history(history, test_accuracies=None):
         history: Keras training history
         test_accuracies: Optional list of test accuracies for each epoch
     """
+    if save_path is None:
+        save_path = "training_history.png"
     plt.figure(figsize=(12, 5))
     
     # Plot accuracy
@@ -151,8 +153,8 @@ def plot_training_history(history, test_accuracies=None):
     plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('training_history.png', dpi=150, bbox_inches='tight')
-    print("✓ Training history plot saved as 'training_history.png'")
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    print(f"✓ Training history plot saved as '{save_path}'")
     plt.close()
 
 def plot_lopo_results(history, test_accuracies, cm, class_names, user_name, model_dir):
