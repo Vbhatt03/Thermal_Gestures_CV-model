@@ -80,6 +80,8 @@ def train_lopo():
         model_name = f"thermal_letter_model_LOPO_{test_user}_{timestamp}"
         model_dir = os.path.join(MODEL_DIR, model_name)
         os.makedirs(model_dir, exist_ok=True)
+        plots_dir = os.path.join(model_dir, "plots")
+        os.makedirs(plots_dir, exist_ok=True)
 
         print("Creating model...")
         # Choose one of these models:
@@ -107,7 +109,7 @@ def train_lopo():
         print("Training model...")
         history = model.fit(
             X_train_processed, y_train,
-            batch_size=32,
+            batch_size=BATCH_SIZE,
             epochs=EPOCHS,
             callbacks=callbacks,
             verbose=1
@@ -122,12 +124,12 @@ def train_lopo():
         # Plot comprehensive LOPO results (loss, accuracy, confusion matrix)
         try:
             plot_lopo_results(
-                history, 
+                history,
                 test_accuracies=test_acc_tracker.test_accuracies,
                 cm=cm,
                 class_names=class_names,
                 user_name=test_user,
-                model_dir=model_dir
+                model_dir=plots_dir
             )
             print(f"✓ Comprehensive LOPO results plot created for {test_user}")
         except Exception as e:
@@ -135,20 +137,18 @@ def train_lopo():
 
         # Also save individual plots for reference
         try:
-            plot_training_history(history, test_accuracies=test_acc_tracker.test_accuracies)
-            # Move to model directory
-            if os.path.exists('training_history.png'):
-                import shutil
-                shutil.move('training_history.png', os.path.join(model_dir, f'training_history_{test_user}.png'))
+            history_path = os.path.join(plots_dir, f"training_history_{test_user}.png")
+            plot_training_history(
+                history,
+                save_path=history_path,
+                test_accuracies=test_acc_tracker.test_accuracies
+            )
         except Exception as e:
             print(f"⚠️  Could not plot training history: {e}")
 
         try:
-            plot_confusion_matrix(cm, class_names, title=f'Confusion Matrix - {test_user}')
-            # Move to model directory
-            if os.path.exists('confusion_matrix.png'):
-                import shutil
-                shutil.move('confusion_matrix.png', os.path.join(model_dir, f'confusion_matrix_{test_user}.png'))
+            cm_path = os.path.join(plots_dir, f"confusion_matrix_{test_user}.png")
+            plot_confusion_matrix(cm, class_names, save_path=cm_path)
         except Exception as e:
             print(f"⚠️  Could not plot confusion matrix: {e}")
 
@@ -181,9 +181,9 @@ if __name__ == "__main__":
     MODEL_DIR = "src\\models"
     EPOCHS = 16
     SEQUENCE_LENGTH = 100
-    BATCH_SIZE = 32
+    BATCH_SIZE = 16
     NUM_CLASSES = 5
-    use_augmentation = True
+    use_augmentation = False
     np.random.seed(RANDOM_SEED)
     tf.random.set_seed(RANDOM_SEED)
 

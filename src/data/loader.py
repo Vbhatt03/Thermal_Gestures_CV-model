@@ -2,6 +2,7 @@ import os
 import json
 import numpy as np
 from sklearn.model_selection import train_test_split
+from .visualizer import load_eeprom_from_json, build_temperature_frames_single_subpage, load_thermal_subpages
 
 def load_json_file(file_path):
     """Load a JSON file containing thermal data."""
@@ -28,7 +29,7 @@ def load_thermal_data_lopo(base_folder, train_users, test_users, random_state=42
     letters = []
     person_ids = []
     user_list = []
-
+    eeprom_list = load_eeprom_from_json("thermal_eeprom.json")
     # Only include folders in train_users or test_users
     person_dirs = sorted([d for d in os.listdir(base_folder)
                          if os.path.isdir(os.path.join(base_folder, d)) and d != 'processed'])
@@ -46,7 +47,8 @@ def load_thermal_data_lopo(base_folder, train_users, test_users, random_state=42
 
             for file in files:
                 file_path = os.path.join(letter_folder, file)
-                data = load_json_file(file_path)
+                subpages = load_thermal_subpages(file_path)
+                data = build_temperature_frames_single_subpage(subpages, eeprom_list)
 
                 if data is not None:
                     thermal_frames = []
@@ -63,17 +65,7 @@ def load_thermal_data_lopo(base_folder, train_users, test_users, random_state=42
                             continue
                         
                         thermal_array = np.array(raw_data, dtype=np.float32)
-                        
-                        # Ensure we have 768 values (24×32 thermal grid)
-                        if thermal_array.shape[0] < 768:
-                            continue  # Skip frames with insufficient data
-                        
-                        # Take only first 768 values if more are present
-                        thermal_array = thermal_array[:768].reshape(24, 32)
-                        
-                        # Normalize from sensor range to 0-1
-                        # Adjust these values based on your actual sensor range
-                        #thermal_array = np.clip(thermal_array / 65535.0, 0, 1)
+                        thermal_array = thermal_array.reshape((24, 32))  # Reshape to 24x32
                         
                         thermal_frames.append(thermal_array)
                     

@@ -1,0 +1,18 @@
+10-FOLD CROSS VALIDATION RESULTS
+================================================================================
+
+Fold  1: Accuracy = 0.8780
+Fold  2: Accuracy = 0.8537
+Fold  3: Accuracy = 0.9268
+Fold  4: Accuracy = 0.9750
+Fold  5: Accuracy = 1.0000
+Fold  6: Accuracy = 0.9500
+Fold  7: Accuracy = 0.6750
+Fold  8: Accuracy = 0.7250
+Fold  9: Accuracy = 0.7500
+Fold 10: Accuracy = 0.8750
+
+Mean Accuracy                 : 0.8609
+Std Accuracy                  : 0.1051
+Min Accuracy                  : 0.6750
+Max Accuracy                  : 1.0000

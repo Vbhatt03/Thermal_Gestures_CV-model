@@ -22,6 +22,7 @@ from src.models.utils import (
     save_model, create_model_checkpoint, create_early_stopping, 
     create_reduce_lr_callback, evaluate_model
 )
+from src.visualization import plotter as pltr
 from src.visualization.plotter import plot_confusion_matrix, plot_training_history
 
 
@@ -185,7 +186,7 @@ def train_fold(fold_num, X_train, X_test, y_train, y_test, class_names, total_fo
     print("\nTraining model...")
     history = model.fit(
         X_train, y_train,
-        batch_size=32,
+        batch_size=BATCH_SIZE,
         epochs=EPOCHS,
         callbacks=callbacks,
         verbose=1,
@@ -304,12 +305,12 @@ def train_10fold_cv():
 
 
 if __name__ == "__main__":
-    RANDOM_SEED = 42
-    DATA_DIR = "D:\\Data_collecn\\micro-gestures\\data\\Labelled_data\\"
-    MODEL_DIR = "src\\models"
-    EPOCHS = 20
+    RANDOM_SEED = 53753
+    DATA_DIR = "./Labelled_data/"
+    MODEL_DIR = "./src/models"
+    EPOCHS = 32
     SEQUENCE_LENGTH = 100
-    BATCH_SIZE = 32
+    BATCH_SIZE = 16
     NUM_CLASSES = 5
     use_augmentation = True
     np.random.seed(RANDOM_SEED)

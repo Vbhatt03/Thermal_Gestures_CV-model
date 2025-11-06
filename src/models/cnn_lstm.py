@@ -1,9 +1,29 @@
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, BatchNormalization
-from tensorflow.keras.layers import Flatten, Dense, Dropout, LSTM, TimeDistributed, Reshape, Input
+from tensorflow.keras.layers import Flatten, Dense, Dropout, LSTM, ConvLSTM2D, TimeDistributed, Reshape, Input, GlobalAveragePooling2D
 
 def create_cnn_lstm_model(input_shape, num_classes):
+    inputs = Input(shape=input_shape)
+    
+    # ConvLSTM directly processes spatial-temporal data
+    x = ConvLSTM2D(32, (3, 3), padding='same', return_sequences=True)(inputs)
+    x = BatchNormalization()(x)
+    x = ConvLSTM2D(64, (3, 3), padding='same', return_sequences=False)(x)
+    x = BatchNormalization()(x)
+    
+    x = GlobalAveragePooling2D()(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(0.5)(x)
+    outputs = Dense(num_classes, activation='softmax')(x)
+    
+    model = Model(inputs=inputs, outputs=outputs)
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy']
+    )
+    return model
 
     inputs = Input(shape=input_shape)
     
