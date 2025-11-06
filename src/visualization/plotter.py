@@ -7,14 +7,26 @@ import tensorflow as tf
 
 class TestAccuracyTracker(tf.keras.callbacks.Callback):
     """
-    Callback to track test accuracy during training.
+    Callback to track test accuracy during training with early stopping.
     Useful for LOPO where we don't have validation set.
+    
+    Features:
+    - Tracks test accuracy every epoch
+    - Early stopping based on test accuracy plateau
+    - Displays epoch-wise test accuracy
+    - Saves best model based on test accuracy
     """
-    def __init__(self, test_data, test_labels):
+    def __init__(self, test_data, test_labels, patience, verbose=True):
         super().__init__()
         self.test_data = test_data
         self.test_labels = test_labels
         self.test_accuracies = []
+        self.patience = patience
+        self.verbose = verbose
+        self.best_test_acc = 0.0
+        self.wait_count = 0
+        self.best_epoch = 0
+        self.best_weights = None
     
     def on_epoch_end(self, epoch, logs=None):
         """Evaluate on test set after each epoch."""
@@ -22,6 +34,39 @@ class TestAccuracyTracker(tf.keras.callbacks.Callback):
             self.test_data, self.test_labels, verbose=0
         )
         self.test_accuracies.append(test_acc)
+        
+        # Display epoch-wise test accuracy
+        train_acc = logs.get('accuracy', 0.0) if logs else 0.0
+        train_loss = logs.get('loss', 0.0) if logs else 0.0
+        
+        if self.verbose:
+            print(f"  ├─ Test Accuracy: {test_acc:.4f} ({test_acc*100:.2f}%) | Test Loss: {test_loss:.4f}")
+        
+        # Early stopping logic based on test accuracy improvement
+        if test_acc > self.best_test_acc:
+            self.best_test_acc = test_acc
+            self.wait_count = 0
+            self.best_epoch = epoch + 1
+            self.best_weights = self.model.get_weights()
+            
+            if self.verbose:
+                print(f"  └─ ✓ New best test accuracy! (was {self.test_accuracies[self.best_epoch-2]:.4f})")
+        else:
+            self.wait_count += 1
+            if self.verbose and self.wait_count % 5 == 0:
+                print(f"  └─ ⚠ No improvement for {self.wait_count}/{self.patience} epochs")
+            
+            # Early stopping trigger
+            if self.wait_count >= self.patience:
+                if self.verbose:
+                    print(f"\n✓ Early stopping triggered!")
+                    print(f"  Best test accuracy: {self.best_test_acc:.4f} at epoch {self.best_epoch}")
+                    print(f"  Stopping training...")
+                self.model.stop_training = True
+                
+                # Restore best weights
+                if self.best_weights is not None:
+                    self.model.set_weights(self.best_weights)
 
 
 def plot_thermal_frame(thermal_frame, title=None, cmap='inferno'):
