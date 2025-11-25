@@ -1,0 +1,121 @@
+Thermal CNN Training – README
+
+This project trains a Convolutional Neural Network (CNN) to classify hand vs no-hand activity using thermal sensor data stored in JSON, plus labels stored in text files.
+
+The model uses 35 consecutive thermal frames per sample (temporal window) and learns spatial–temporal patterns directly from the numeric thermal values.
+
+1. Directory Structure
+
+Your dataset folder must look like this:
+
+lopocv_first/
+│
+├─ person1/
+│   ├─ person1_labelled_first.txt
+│   └─ person1_data.json
+│
+├─ person2/
+│   ├─ person2_labelled_first.txt
+│   └─ person2_data.json
+│
+└─ person8/ ...
+
+1.1 Label File (personX_labelled_first.txt)
+
+Each line contains:
+
+<timestamp> <label>
+
+
+Example:
+
+609647 0
+609791 1
+
+
+Where:
+
+0 = hands
+
+1 = nohands
+
+1.2 JSON File (personX_data.json)
+
+This file is a list, not a dictionary.
+Each element is:
+
+[ timestamp, [frame0, frame1, ..., frame34] ]
+
+
+Each frame = a 2D array (thermal values, typically 24×24)
+
+35 frames = ~3.5 seconds window
+
+Example:
+
+[
+  [609647, [[...24 values...],[...24 values...], ... repeated for 35 frames]],
+  [609791, [[...], ...]]
+]
+
+2. Files You Need
+
+✔ train_json_cnn.py – the training script (the code I provided)
+✔ lopocv_first/ – your dataset folder with persons
+✔ Python 3.8+
+✔ Libraries:
+
+torch
+torchvision
+numpy
+
+
+Install:
+
+pip install torch torchvision numpy
+
+3. How to Run
+
+Place the training script in the project root:
+
+project_root/
+    train_json_cnn.py
+    lopocv_first/
+
+
+Run:
+
+python train_json_cnn.py
+
+
+Training will start automatically:
+
+Epoch 1/100 — Loss: 0.62 — Acc: 71.25%
+Epoch 2/100 — Loss: 0.53 — Acc: 78.50%
+...
+
+4. What the Script Does
+
+Loads all persons’ label files
+
+Loads all JSON thermal data
+
+Converts JSON list → internal dictionary
+
+Builds samples of (35 thermal frames, label)
+
+Feeds them into the CNN
+
+Trains for 100 epochs
+
+5. Output
+
+The script prints:
+
+Loss per epoch
+
+Accuracy per epoch
+
+You can modify it to save the model:
+
+torch.save(model.state_dict(), "thermal_cnn.pth")
