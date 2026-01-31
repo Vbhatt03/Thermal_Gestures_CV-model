@@ -24,7 +24,7 @@ else:
 from config import *
 from src.data.loader import load_thermal_data_lopo
 from src.data.preprocessing import prepare_data_for_training
-from src.models.cnn_lstm import create_cnn_lstm_model, create_lightweight_cnn_lstm, create_lstm_only_model
+from src.models.cnn_lstm import create_cnn_lstm_model, create_lightweight_cnn_lstm, create_lstm_only_model, create_tcn_model
 from src.models.utils import (
     save_model, create_model_checkpoint, create_early_stopping, 
     create_reduce_lr_callback, evaluate_model
@@ -87,7 +87,7 @@ def train_lopo():
         # Choose one of these models:
         # model = create_cnn_lstm_model(input_shape, num_classes)  # Original - HIGH memory (~10GB)
         # model = create_lightweight_cnn_lstm(input_shape, num_classes)  # Lightweight CNN - Still high memory (~8GB)
-        model = create_lstm_only_model(input_shape, num_classes)  # LSTM-only - LOW memory (~2-3GB)
+        model = create_tcn_model(input_shape, num_classes)  # LSTM-only - LOW memory (~2-3GB)
 
         # Callback to track test accuracy during training with early stopping
         test_acc_tracker = TestAccuracyTracker(
@@ -177,7 +177,7 @@ def train_lopo():
 
 if __name__ == "__main__":
     RANDOM_SEED = 42
-    DATA_DIR = "D:\\Data_collecn\\micro-gestures\\data\\Labelled_data\\"
+    DATA_DIR = "/home/vyomesh/Hothands/Labelled_data/"
     MODEL_DIR = "src\\models"
     EPOCHS = 16
     SEQUENCE_LENGTH = 100

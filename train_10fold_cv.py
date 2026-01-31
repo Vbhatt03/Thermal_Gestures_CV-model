@@ -17,7 +17,7 @@ from sklearn.model_selection import KFold
 from config import *
 from src.data.loader import load_json_file
 from src.data.preprocessing import preprocess_sequence
-from src.models.cnn_lstm import create_cnn_lstm_model
+from src.models.cnn_lstm import create_cnn_lstm_model, create_tcn_model, create_lstm_only_model, create_tcn_model, create_lstm_only_model
 from src.models.utils import (
     save_model, create_model_checkpoint, create_early_stopping, 
     create_reduce_lr_callback, evaluate_model
@@ -170,7 +170,10 @@ def train_fold(fold_num, X_train, X_test, y_train, y_test, class_names, total_fo
     os.makedirs(model_dir, exist_ok=True)
     
     print(f"\nCreating model... Input shape: {input_shape}")
-    model = create_cnn_lstm_model(input_shape, num_classes)
+    # Choose model architecture:
+    # model = create_cnn_lstm_model(input_shape, num_classes)  # Original (ConvLSTM2D - NOT compatible with TFLite Micro)
+    # model = create_lstm_only_model(input_shape, num_classes)  # LSTM-only (TFLite Micro compatible, ~40-50ms inference)
+    model = create_tcn_model(input_shape, num_classes)  # TCN (TFLite Micro compatible, ~20-35ms inference, FASTEST)
     model.summary()
     
     # Create callbacks
@@ -306,7 +309,7 @@ def train_10fold_cv():
 
 if __name__ == "__main__":
     RANDOM_SEED = 53753
-    DATA_DIR = "./Labelled_data/"
+    DATA_DIR = "/home/vyomesh/Hothands/Labelled_data"
     MODEL_DIR = "./src/models"
     EPOCHS = 32
     SEQUENCE_LENGTH = 100
